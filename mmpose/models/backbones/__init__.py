@@ -34,6 +34,7 @@ from .vipnas_resnet import ViPNAS_ResNet
 # custom yolo backbone
 from .yolov5_backbone import YolosBackboneChannelx2
 from .yolov8_backbone import Yolosv8BackboneChannelx2
+from .yolov11_backbone import Yolosv11BackboneChannelx2
 
 __all__ = [
     'AlexNet', 'HourglassNet', 'HourglassAENet', 'HRNet', 'MobileNetV2',
@@ -43,5 +44,5 @@ __all__ = [
     'LiteHRNet', 'V2VNet', 'HRFormer', 'PyramidVisionTransformer',
     'PyramidVisionTransformerV2', 'SwinTransformer', 'DSTFormer', 'CSPDarknet',
     'CSPNeXt',
-    'YolosBackboneChannelx2', 'Yolosv8BackboneChannelx2'
+    'YolosBackboneChannelx2', 'Yolosv8BackboneChannelx2', 'Yolosv11BackboneChannelx2'
 ]

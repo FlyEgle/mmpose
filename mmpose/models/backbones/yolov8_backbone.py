@@ -45,24 +45,16 @@ class Conv(nn.Module):
         return self.act(self.conv(x))
 
 class Bottleneck(nn.Module):
-    """A bottleneck layer with optional shortcut and group convolution for efficient feature extraction."""
-
-    def __init__(self, c1, c2, shortcut=True, g=1, e=0.5):
-        """Initializes a standard bottleneck layer with optional shortcut and group convolution, supporting channel
-        expansion.
-        """
+    # Standard bottleneck
+    def __init__(self, c1, c2, shortcut=True, g=1, k=(3, 3), e=0.5):  # ch_in, ch_out, shortcut, groups, kernels, expand
         super().__init__()
         c_ = int(c2 * e)  # hidden channels
-        self.cv1 = Conv(c1, c_, 1, 1)
-        self.cv2 = Conv(c_, c2, 3, 1, g=g)
-        self.add = shortcut and c1 == c2
+        self.cv1 = Conv(c1, c_, k[0], 1)  # 输入通道: c1, 输出通道：c_ , 卷积核：3x3, 步长1
+        self.cv2 = Conv(c_, c2, k[1], 1, g=g) # 输入通道：c_ , 输出通道c2, 卷积核：3x3, 步长1
+        self.add = shortcut and c1 == c2  # 当传入的shortcut参数为true，且c1和c2相等时，则使用残差连接。
 
     def forward(self, x):
-        """Processes input through two convolutions, optionally adds shortcut if channel dimensions match; input is a
-        tensor.
-        """
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
-
 
 class C3(nn.Module):
     """Implements a CSP Bottleneck module with three convolutions for enhanced feature extraction in neural networks."""
@@ -146,7 +138,7 @@ class Yolosv8BackboneChannelx2(BaseModule):
 
         # self.names = [str(i) for i in range(nc)]  # default names
         # BackBone
-        self.conv1 = Conv(3, 64, 6, 2, 2)
+        self.conv1 = Conv(3, 64, 3, 2, 1)
         # self.conv1 = Conv(3, 32, 3, 2, 1)
         # self.conv1_stem = Conv(32, 32, 3, 1, 1)   # add for alux conv stem 
         self.conv2 = Conv(64, 128, 3, 2, 1)
@@ -187,3 +179,11 @@ class Yolosv8BackboneChannelx2(BaseModule):
         # get last feature
         outs.append(x)
         return tuple(outs)
+    
+
+if __name__ == "__main__":
+    inputs = torch.randn(1, 3, 256, 192).float()
+    model = Yolosv8BackboneChannelx2()
+
+    outputs = model(inputs)
+    print(outputs[0].shape)
