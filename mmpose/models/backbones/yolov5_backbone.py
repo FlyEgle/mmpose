@@ -3,7 +3,12 @@ import torch
 import warnings
 import torch.nn as nn 
 
-from mmpose.models import BACKBONES
+from torch import Tensor
+from mmpose.registry import MODELS
+from mmengine.model import BaseModule
+from torch.nn.modules.batchnorm import _BatchNorm
+
+from typing import Optional, Sequence, Tuple
 
 
 def autopad(k, p=None, d=1):
@@ -118,10 +123,10 @@ class Concat(nn.Module):
         """
         return torch.cat(x, self.d)
 
-
-class YolosBackboneChannelx2(nn.Module):
-    def __init__(self):
-        super(YolosBackboneChannelx2, self).__init__()
+@MODELS.register_module()
+class YolosBackboneChannelx2(BaseModule):
+    def __init__(self, norm_eval: bool=False):
+        super().__init__()
 
         # self.names = [str(i) for i in range(nc)]  # default names
         # BackBone
@@ -137,10 +142,18 @@ class YolosBackboneChannelx2(nn.Module):
         self.conv5 = Conv(512, 1024, 3, 2)
         self.C4 = C3(1024, 1024, n=1)
         self.spp1 = SPPF(1024, 1024, k=5)
-        
-        
 
-    def forward(self, x):
+        self.norm_eval = norm_eval
+        
+    def train(self, mode=True) -> None:
+        super().train(mode)
+        if mode and self.norm_eval:
+            for m in self.modules():
+                if isinstance(m, _BatchNorm):
+                    m.eval()
+
+    def forward(self, x: Tuple[Tensor, ...]) -> Tuple[Tensor, ...]:
+        outs = []
         x = self.conv1(x)
         # x = self.conv1_stem(x)
         x = self.conv2(x)
@@ -154,7 +167,10 @@ class YolosBackboneChannelx2(nn.Module):
         # print(x)
         x = self.C4(x)
         x = self.spp1(x)
-        return x
+
+        # get last feature
+        outs.append(x)
+        return tuple(outs)
     
 
 if __name__ == "__main__":

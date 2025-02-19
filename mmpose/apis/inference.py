@@ -100,7 +100,8 @@ def init_model(config: Union[str, Path, Config],
     scope = config.get('default_scope', 'mmpose')
     if scope is not None:
         init_default_scope(scope)
-
+    # import ipdb;ipdb.set_trace()
+    backbone = build_pose_estimator(config.model.backbone)
     model = build_pose_estimator(config.model)
     model = revert_sync_batchnorm(model)
     # get dataset_meta in this priority: checkpoint > config > default (COCO)
@@ -128,34 +129,19 @@ def init_model(config: Union[str, Path, Config],
     model.cfg = config  # save the config in the model for convenience
     model.to(device)
     model.eval()
-    return model
 
+    import ipdb;ipdb.set_trace()
+    backbone.to(device)
+    backbone.eval()
+    return model, backbone
 
-def inference_topdown(model: nn.Module,
-                      img: Union[np.ndarray, str],
-                      bboxes: Optional[Union[List, np.ndarray]] = None,
-                      bbox_format: str = 'xyxy') -> List[PoseDataSample]:
-    """Inference image with a top-down pose estimator.
-
-    Args:
-        model (nn.Module): The top-down pose estimator
-        img (np.ndarray | str): The loaded image or image file to inference
-        bboxes (np.ndarray, optional): The bboxes in shape (N, 4), each row
-            represents a bbox. If not given, the entire image will be regarded
-            as a single bbox area. Defaults to ``None``
-        bbox_format (str): The bbox format indicator. Options are ``'xywh'``
-            and ``'xyxy'``. Defaults to ``'xyxy'``
-
-    Returns:
-        List[:obj:`PoseDataSample`]: The inference results. Specifically, the
-        predicted keypoints and scores are saved at
-        ``data_sample.pred_instances.keypoints`` and
-        ``data_sample.pred_instances.keypoint_scores``.
-    """
+# 用来 debug backbone 的输入和输出
+def inference_backbone(model, backbone, img, bboxes, bbox_format: str = 'xyxy'):
     scope = model.cfg.get('default_scope', 'mmpose')
     if scope is not None:
         init_default_scope(scope)
     pipeline = Compose(model.cfg.test_dataloader.dataset.pipeline)
+    import ipdb;ipdb.set_trace()
 
     if bboxes is None or len(bboxes) == 0:
         # get bbox from the image size
@@ -186,6 +172,83 @@ def inference_topdown(model: nn.Module,
         data_info['bbox_score'] = np.ones(1, dtype=np.float32)  # shape (1,)
         data_info.update(model.dataset_meta)
         data_list.append(pipeline(data_info))
+
+    # import ipdb;ipdb.set_trace()
+    if data_list:
+        # collate data list into a batch, which is a dict with following keys:
+        # batch['inputs']: a list of input images
+        # batch['data_samples']: a list of :obj:`PoseDataSample`
+        batch = pseudo_collate(data_list)
+        with torch.no_grad():
+            # results = model.test_step(batch)
+            for inputs in batch['inputs']:
+                results = backbone(inputs.float().cuda())
+            print(results.shape)
+    else:
+        results = []
+
+    # import ipdb;ipdb.set_trace()
+
+    return results
+
+def inference_topdown(model: nn.Module,
+                      img: Union[np.ndarray, str],
+                      bboxes: Optional[Union[List, np.ndarray]] = None,
+                      bbox_format: str = 'xyxy') -> List[PoseDataSample]:
+    """Inference image with a top-down pose estimator.
+
+    Args:
+        model (nn.Module): The top-down pose estimator
+        img (np.ndarray | str): The loaded image or image file to inference
+        bboxes (np.ndarray, optional): The bboxes in shape (N, 4), each row
+            represents a bbox. If not given, the entire image will be regarded
+            as a single bbox area. Defaults to ``None``
+        bbox_format (str): The bbox format indicator. Options are ``'xywh'``
+            and ``'xyxy'``. Defaults to ``'xyxy'``
+
+    Returns:
+        List[:obj:`PoseDataSample`]: The inference results. Specifically, the
+        predicted keypoints and scores are saved at
+        ``data_sample.pred_instances.keypoints`` and
+        ``data_sample.pred_instances.keypoint_scores``.
+    """
+    scope = model.cfg.get('default_scope', 'mmpose')
+    if scope is not None:
+        init_default_scope(scope)
+    pipeline = Compose(model.cfg.test_dataloader.dataset.pipeline)
+    # import ipdb;ipdb.set_trace()
+
+    if bboxes is None or len(bboxes) == 0:
+        # get bbox from the image size
+        if isinstance(img, str):
+            w, h = Image.open(img).size
+        else:
+            h, w = img.shape[:2]
+
+        bboxes = np.array([[0, 0, w, h]], dtype=np.float32)
+    else:
+        if isinstance(bboxes, list):
+            bboxes = np.array(bboxes)
+
+        assert bbox_format in {'xyxy', 'xywh'}, \
+            f'Invalid bbox_format "{bbox_format}".'
+
+        if bbox_format == 'xywh':
+            bboxes = bbox_xywh2xyxy(bboxes)
+
+    # construct batch data samples
+    data_list = []
+    for bbox in bboxes:
+        if isinstance(img, str):
+            data_info = dict(img_path=img)
+        else:
+            data_info = dict(img=img)
+        data_info['bbox'] = bbox[None]  # shape (1, 4)
+        data_info['bbox_score'] = np.ones(1, dtype=np.float32)  # shape (1,)
+        data_info.update(model.dataset_meta)
+        data_list.append(pipeline(data_info))
+
+    # import ipdb;ipdb.set_trace()
 
     if data_list:
         # collate data list into a batch, which is a dict with following keys:

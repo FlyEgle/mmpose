@@ -188,8 +188,14 @@ class CSPNeXt(BaseModule):
     def forward(self, x: Tuple[Tensor, ...]) -> Tuple[Tensor, ...]:
         outs = []
         for i, layer_name in enumerate(self.layers):
+            # import ipdb;ipdb.set_trace()
             layer = getattr(self, layer_name)
+            # print(x)
+            # print(layer_name, x.shape)
             x = layer(x)
+            # print(x.shape)
+            #  这里目前只输出最后一个feature
             if i in self.out_indices:
                 outs.append(x)
+        
         return tuple(outs)

@@ -12,7 +12,7 @@ import mmengine
 import numpy as np
 from mmengine.logging import print_log
 
-from mmpose.apis import inference_topdown
+from mmpose.apis import inference_topdown, inference_backbone
 from mmpose.apis import init_model as init_pose_estimator
 from mmpose.evaluation.functional import nms
 from mmpose.registry import VISUALIZERS
@@ -30,21 +30,26 @@ def process_one_image(args,
                       img,
                       detector,
                       pose_estimator,
+                      pose_backbone,
                       visualizer=None,
                       show_interval=0):
     """Visualize predicted keypoints (and heatmaps) of one image."""
 
     # predict bbox
     det_result = inference_detector(detector, img)
+    # import ipdb;ipdb.set_trace()
     pred_instance = det_result.pred_instances.cpu().numpy()
-    bboxes = np.concatenate(
-        (pred_instance.bboxes, pred_instance.scores[:, None]), axis=1)
+    bboxes = np.concatenate((pred_instance.bboxes, pred_instance.scores[:, None]), axis=1)
     bboxes = bboxes[np.logical_and(pred_instance.labels == args.det_cat_id,
                                    pred_instance.scores > args.bbox_thr)]
     bboxes = bboxes[nms(bboxes, args.nms_thr), :4]
 
     # predict keypoints
     pose_results = inference_topdown(pose_estimator, img, bboxes)
+
+    # import ipdb;ipdb.set_trace()
+    # feature_results = inference_backbone(pose_estimator, pose_backbone, img, bboxes)
+
     data_samples = merge_data_samples(pose_results)
 
     # show the results
@@ -182,7 +187,7 @@ def main():
     detector.cfg = adapt_mmdet_pipeline(detector.cfg)
 
     # build pose estimator
-    pose_estimator = init_pose_estimator(
+    pose_estimator, pose_backbone = init_pose_estimator(
         args.pose_config,
         args.pose_checkpoint,
         device=args.device,
@@ -208,7 +213,7 @@ def main():
 
         # inference
         pred_instances = process_one_image(args, args.input, detector,
-                                           pose_estimator, visualizer)
+                                           pose_estimator, pose_backbone, visualizer)
 
         if args.save_predictions:
             pred_instances_list = split_instances(pred_instances)
@@ -237,7 +242,7 @@ def main():
 
             # topdown pose estimation
             pred_instances = process_one_image(args, frame, detector,
-                                               pose_estimator, visualizer,
+                                               pose_estimator, pose_backbone, visualizer,
                                                0.001)
 
             if args.save_predictions:

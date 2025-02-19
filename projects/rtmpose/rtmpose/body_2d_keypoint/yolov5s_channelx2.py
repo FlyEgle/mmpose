@@ -62,21 +62,22 @@ model = dict(
         bgr_to_rgb=True),
     backbone=dict(
         _scope_='mmpose',
-        type='CSPNeXt',
-        arch='P5',
-        expand_ratio=0.5,
-        deepen_factor=1.,
-        widen_factor=1.,
-        out_indices=(4, ),
-        channel_attention=True,
-        norm_cfg=dict(type='SyncBN'),
-        act_cfg=dict(type='SiLU'),
-        init_cfg=dict(
-            type='Pretrained',
-            prefix='backbone.',
-            checkpoint='https://download.openmmlab.com/mmpose/v1/projects/'
-            'rtmposev1/cspnext-l_udp-aic-coco_210e-256x192-273b7631_20230130.pth'  # noqa
-        )),
+        type='YolosBackboneChannelx2',
+        # arch='P5',
+        # expand_ratio=0.5,
+        # deepen_factor=1.,
+        # widen_factor=1.,
+        # out_indices=(4, ),
+        # channel_attention=True,
+        # norm_cfg=dict(type='SyncBN'),
+        # act_cfg=dict(type='SiLU'),
+        # init_cfg=dict(
+            # type='Pretrained',
+            # prefix='backbone.',
+            # checkpoint='https://download.openmmlab.com/mmpose/v1/projects/'
+            # 'rtmposev1/cspnext-l_udp-aic-coco_210e-256x192-273b7631_20230130.pth'  # noqa
+        # )),
+        ),
     head=dict(
         type='RTMCCHead',
         in_channels=1024,

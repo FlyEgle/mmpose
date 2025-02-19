@@ -3,7 +3,12 @@ import torch
 import warnings
 import torch.nn as nn 
 
-from mmpose.models import BACKBONES
+from torch import Tensor
+from mmpose.registry import MODELS
+from mmengine.model import BaseModule
+from torch.nn.modules.batchnorm import _BatchNorm
+
+from typing import Optional, Sequence, Tuple
 
 
 def autopad(k, p=None, d=1):
@@ -119,9 +124,25 @@ class Concat(nn.Module):
         return torch.cat(x, self.d)
 
 
-class YolosBackboneChannelx2(nn.Module):
-    def __init__(self):
-        super(YolosBackboneChannelx2, self).__init__()
+class C2f(nn.Module):
+    # CSP Bottleneck with 2 convolutions
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
+        super().__init__()
+        self.c = int(c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + n) * self.c, c2, 1)  # optional act=FReLU(c2)
+        self.m = nn.ModuleList(Bottleneck(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) for _ in range(n))
+
+    def forward(self, x):
+        y = list(self.cv1(x).split((self.c, self.c), 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.cv2(torch.cat(y, 1))
+
+
+@MODELS.register_module()
+class Yolosv8BackboneChannelx2(BaseModule):
+    def __init__(self, norm_eval: bool=False):
+        super().__init__()
 
         # self.names = [str(i) for i in range(nc)]  # default names
         # BackBone
@@ -129,18 +150,26 @@ class YolosBackboneChannelx2(nn.Module):
         # self.conv1 = Conv(3, 32, 3, 2, 1)
         # self.conv1_stem = Conv(32, 32, 3, 1, 1)   # add for alux conv stem 
         self.conv2 = Conv(64, 128, 3, 2, 1)
-        self.C1 = C3(128, 128)
+        self.C1 = C2f(128, 128)
         self.conv3 = Conv(128, 256, 3, 2, 1)
-        self.C2 = C3(256, 256, n=2)
+        self.C2 = C2f(256, 256, n=2)
         self.conv4 = Conv(256, 512, 3, 2, 1)
-        self.C3 = C3(512, 512, n=3)
+        self.C3 = C2f(512, 512, n=3)
         self.conv5 = Conv(512, 1024, 3, 2)
-        self.C4 = C3(1024, 1024, n=1)
+        self.C4 = C2f(1024, 1024, n=1)
         self.spp1 = SPPF(1024, 1024, k=5)
-        
-        
 
-    def forward(self, x):
+        self.norm_eval = norm_eval
+        
+    def train(self, mode=True) -> None:
+        super().train(mode)
+        if mode and self.norm_eval:
+            for m in self.modules():
+                if isinstance(m, _BatchNorm):
+                    m.eval()
+
+    def forward(self, x: Tuple[Tensor, ...]) -> Tuple[Tensor, ...]:
+        outs = []
         x = self.conv1(x)
         # x = self.conv1_stem(x)
         x = self.conv2(x)
@@ -154,15 +183,7 @@ class YolosBackboneChannelx2(nn.Module):
         # print(x)
         x = self.C4(x)
         x = self.spp1(x)
-        return x
-    
 
-if __name__ == "__main__":
-    inputs = torch.randn(1, 3, 256, 192).float()
-    model = YolosBackboneChannelx2()
-
-    outputs = model(inputs)
-    print(outputs.shape)
-
-        
-        
+        # get last feature
+        outs.append(x)
+        return tuple(outs)
