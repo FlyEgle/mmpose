@@ -130,7 +130,7 @@ def init_model(config: Union[str, Path, Config],
     model.to(device)
     model.eval()
 
-    import ipdb;ipdb.set_trace()
+    # import ipdb;ipdb.set_trace()
     backbone.to(device)
     backbone.eval()
     return model, backbone

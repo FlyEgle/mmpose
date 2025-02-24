@@ -30,7 +30,6 @@ def process_one_image(args,
                       img,
                       detector,
                       pose_estimator,
-                      pose_backbone,
                       visualizer=None,
                       show_interval=0
                       ):
@@ -47,6 +46,7 @@ def process_one_image(args,
 
     # predict keypoints
     pose_results = inference_topdown(pose_estimator, img, bboxes)
+    
     print("pose_results: ", pose_results)
 
     # import ipdb;ipdb.set_trace()
